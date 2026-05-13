@@ -13,6 +13,7 @@ from core.institutional import (
 )
 from core.loader import search_companies
 from core.market import get_all_stock_names
+from core.nav import stock_table
 
 st.set_page_config(page_title="法人籌碼", page_icon="🏦", layout="wide")
 st.title("🏦 法人籌碼（三大法人）")
@@ -58,14 +59,14 @@ def _show_inst_table(df: pd.DataFrame, market_label: str):
         top20 = df.nlargest(20, inst_col)[["code", "name", "外資淨買超", "投信淨買超", "自營商淨買超", inst_col]]
         top20 = top20.reset_index(drop=True)
         top20.columns = ["代號", "名稱", "外資淨買超(股)", "投信淨買超(股)", "自營商淨買超(股)", "三大合計(股)"]
-        st.dataframe(top20, use_container_width=True, hide_index=True)
+        stock_table(top20, key=f"inst_buy_{market_label}")
 
     with c2:
         st.markdown("#### 三大法人合計賣超 Top 20")
         bot20 = df.nsmallest(20, inst_col)[["code", "name", "外資淨買超", "投信淨買超", "自營商淨買超", inst_col]]
         bot20 = bot20.reset_index(drop=True)
         bot20.columns = ["代號", "名稱", "外資淨買超(股)", "投信淨買超(股)", "自營商淨買超(股)", "三大合計(股)"]
-        st.dataframe(bot20, use_container_width=True, hide_index=True)
+        stock_table(bot20, key=f"inst_sell_{market_label}")
 
     st.markdown("#### 法人別買超統計（全市場總計）")
     cols_stat = st.columns(4)

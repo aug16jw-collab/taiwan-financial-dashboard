@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 from core.loader import quality_filter
 from core.charts import distribution_chart, market_pie
+from core.nav import stock_table
 from config import METRIC_DEFS, THRESHOLDS, COLOR_GOOD, COLOR_BAD, COLOR_LISTED, COLOR_OTC
 
 st.set_page_config(page_title="市場總覽", page_icon="📊", layout="wide")
@@ -122,13 +123,5 @@ q_display["自由現金流"] = q_display["自由現金流"].apply(
     lambda v: f"{v:,.0f}" if pd.notna(v) else "-"
 )
 
-def _highlight(row):
-    mkt = row["市場"]
-    base = f"background-color: {COLOR_LISTED}" if mkt == "上市" else f"background-color: {COLOR_OTC}"
-    return [base] * len(row)
-
-try:
-    styled = q_display.style.apply(_highlight, axis=1)
-    st.dataframe(styled, use_container_width=True, hide_index=True)
-except Exception:
-    st.dataframe(q_display, use_container_width=True, hide_index=True)
+stock_table(q_display, key="quality_table",
+            column_config={"市場": st.column_config.TextColumn(width="small")})

@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pandas as pd
 import streamlit as st
 from core.charts import top20_chart
+from core.nav import stock_table
 from config import METRIC_DEFS
 
 st.set_page_config(page_title="排行榜", page_icon="🏆", layout="wide")
@@ -59,4 +60,4 @@ for tab, (label, field, desc) in zip(tabs, RANK_METRICS):
             sub.columns = ["代號", "名稱", "市場", label]
             sub["代號"] = sub["代號"].astype(int)
 
-            st.dataframe(sub, use_container_width=True)
+            stock_table(sub, key=f"rank_{field}")

@@ -23,7 +23,8 @@ if latest.empty:
 # ── Search ──
 col_search, col_period = st.columns([3, 1])
 with col_search:
-    query = st.text_input("輸入股票代號或名稱", placeholder="例如：2330 或 台積電", value="2330")
+    _default = st.query_params.get("code", "2330")
+    query = st.text_input("輸入股票代號或名稱", placeholder="例如：2330 或 台積電", value=_default)
 with col_period:
     period = st.selectbox("K線期間", ["3mo", "6mo", "1y", "2y"], index=2,
                           format_func=lambda x: {"3mo":"3個月","6mo":"6個月","1y":"1年","2y":"2年"}[x])

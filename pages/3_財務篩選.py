@@ -6,6 +6,7 @@ import io
 import numpy as np
 import pandas as pd
 import streamlit as st
+from core.nav import stock_table
 from config import METRIC_DEFS, COLOR_LISTED, COLOR_OTC
 
 st.set_page_config(page_title="財務篩選", page_icon="⚙️", layout="wide")
@@ -95,15 +96,7 @@ disp["current_ratio"] = disp["current_ratio"].apply(lambda v: f"{v:.2f}x" if pd.
 disp["free_cf"] = disp["free_cf"].apply(lambda v: f"{v:,.0f}" if pd.notna(v) else "-")
 disp.columns = [col_names[c] for c in display_cols]
 
-def _row_color(row):
-    c = COLOR_LISTED if row["市場"] == "上市" else COLOR_OTC
-    return [f"background-color: {c}"] * len(row)
-
-try:
-    styled = disp.style.apply(_row_color, axis=1)
-    st.dataframe(styled, use_container_width=True, hide_index=True)
-except Exception:
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+stock_table(disp, key="filter_result_table")
 
 # ── Export ──
 buf = io.BytesIO()

@@ -7,6 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from core.industry import add_industry_column, get_industry_list
+from core.nav import stock_table
 from config import METRIC_DEFS
 
 st.set_page_config(page_title="產業分析", page_icon="🏭", layout="wide")
@@ -171,4 +172,4 @@ for m in METRIC_DEFS[:8]:
 disp = disp.sort_values("roe", ascending=False).reset_index(drop=True)
 
 disp.columns = ["代號", "名稱", "市場"] + [m[0] for m in METRIC_DEFS[:8]]
-st.dataframe(disp, use_container_width=True, hide_index=True)
+stock_table(disp, key="industry_drill")
