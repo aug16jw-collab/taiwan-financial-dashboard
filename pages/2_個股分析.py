@@ -23,7 +23,9 @@ if latest.empty:
 # ── Search ──
 col_search, col_period = st.columns([3, 1])
 with col_search:
-    _default = st.query_params.get("code", "2330")
+    # nav_code set by stock_table() in other pages; query_params used for direct URL links
+    _nav = st.session_state.pop("nav_code", None)
+    _default = _nav or st.query_params.get("code", "2330")
     query = st.text_input("輸入股票代號或名稱", placeholder="例如：2330 或 台積電", value=_default)
 with col_period:
     period = st.selectbox("K線期間", ["3mo", "6mo", "1y", "2y"], index=2,

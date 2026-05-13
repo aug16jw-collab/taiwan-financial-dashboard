@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 
-def _find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
     for c in candidates:
         if c in df.columns:
             return c
@@ -54,5 +54,6 @@ def stock_table(
     c1.info(f"已選取：**{selected_code} {selected_name}**")
     with c2:
         if st.button("🔍 個股分析", key=f"_nav_{key}", use_container_width=True):
-            st.query_params["code"] = selected_code
+            # Use session_state to pass code — more reliable than query_params across page switches
+            st.session_state["nav_code"] = selected_code
             st.switch_page("pages/2_個股分析.py")

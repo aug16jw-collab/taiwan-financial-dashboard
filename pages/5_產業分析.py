@@ -13,6 +13,12 @@ from config import METRIC_DEFS
 st.set_page_config(page_title="產業分析", page_icon="🏭", layout="wide")
 st.title("🏭 產業分析")
 
+
+def _clip_iqr(series: pd.Series, k: float = 2.5) -> tuple:
+    q1, q3 = series.quantile(0.25), series.quantile(0.75)
+    iqr = q3 - q1
+    return q1 - k * iqr, q3 + k * iqr
+
 latest = st.session_state.get("selected_df", st.session_state.get("latest", pd.DataFrame()))
 
 if latest.empty:
@@ -80,13 +86,6 @@ st.markdown("---")
 
 # ── Two-column: scatter + boxplot ──
 c1, c2 = st.columns(2)
-
-def _clip_iqr(series: pd.Series, k: float = 2.5) -> tuple:
-    """Return (lo, hi) whisker bounds using IQR×k, for axis range."""
-    q1, q3 = series.quantile(0.25), series.quantile(0.75)
-    iqr = q3 - q1
-    return q1 - k * iqr, q3 + k * iqr
-
 
 with c1:
     st.markdown("#### 產業分布 — 毛利率 vs ROE")
