@@ -55,6 +55,8 @@ st.markdown(f"### 各產業「{metric_label}」中位數比較")
 col_val = f"{field}_median"
 if col_val in agg.columns:
     agg_sorted = agg.sort_values(col_val, ascending=False).dropna(subset=[col_val])
+    # Clip bar chart range to IQR×3 to avoid one outlier industry distorting scale
+    _blo, _bhi = _clip_iqr(agg_sorted[col_val], k=3.0)
     fig = px.bar(
         agg_sorted,
         x="industry",
@@ -65,7 +67,12 @@ if col_val in agg.columns:
         text=agg_sorted[col_val].apply(lambda v: f"{v:.1f}{unit}"),
     )
     fig.update_traces(textposition="outside")
-    fig.update_layout(height=420, xaxis_tickangle=-35, coloraxis_showscale=False)
+    fig.update_layout(
+        height=420,
+        xaxis_tickangle=-35,
+        coloraxis_showscale=False,
+        yaxis=dict(range=[min(_blo, 0), _bhi * 1.15]),
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
@@ -73,42 +80,75 @@ st.markdown("---")
 # ── Two-column: scatter + boxplot ──
 c1, c2 = st.columns(2)
 
+def _clip_iqr(series: pd.Series, k: float = 2.5) -> tuple:
+    """Return (lo, hi) whisker bounds using IQR×k, for axis range."""
+    q1, q3 = series.quantile(0.25), series.quantile(0.75)
+    iqr = q3 - q1
+    return q1 - k * iqr, q3 + k * iqr
+
+
 with c1:
     st.markdown("#### 產業分布 — 毛利率 vs ROE")
     scatter_df = df[["code", "name", "industry", "market", "gross_margin", "roe", "eps"]].copy()
     scatter_df = scatter_df.dropna(subset=["gross_margin", "roe"])
-    scatter_df["eps_size"] = scatter_df["eps"].clip(lower=0).fillna(0)
+
+    # Clip display range to IQR×2.5 to suppress extreme outliers
+    gm_lo, gm_hi = _clip_iqr(scatter_df["gross_margin"])
+    roe_lo, roe_hi = _clip_iqr(scatter_df["roe"])
+    plot_df = scatter_df[
+        scatter_df["gross_margin"].between(gm_lo, gm_hi) &
+        scatter_df["roe"].between(roe_lo, roe_hi)
+    ].copy()
+    plot_df["eps_size"] = plot_df["eps"].clip(lower=0.01).fillna(0.01)
+
     fig2 = px.scatter(
-        scatter_df,
+        plot_df,
         x="gross_margin",
         y="roe",
         color="industry",
         size="eps_size",
-        size_max=20,
+        size_max=18,
         hover_data={"code": True, "name": True, "eps_size": False},
         labels={"gross_margin": "毛利率(%)", "roe": "ROE(%)"},
+        opacity=0.75,
     )
-    fig2.add_hline(y=10, line_dash="dash", line_color="gray", opacity=0.4)
-    fig2.add_vline(x=20, line_dash="dash", line_color="gray", opacity=0.4)
-    fig2.update_layout(height=400, showlegend=False)
+    fig2.add_hline(y=10, line_dash="dash", line_color="gray", opacity=0.5,
+                   annotation_text="ROE 10%", annotation_position="right")
+    fig2.add_vline(x=20, line_dash="dash", line_color="gray", opacity=0.5,
+                   annotation_text="毛利 20%", annotation_position="top")
+    fig2.update_layout(height=420, showlegend=False,
+                       xaxis=dict(range=[max(gm_lo, -20), min(gm_hi, 120)]),
+                       yaxis=dict(range=[max(roe_lo, -30), min(roe_hi, 80)]))
+    outlier_n = len(scatter_df) - len(plot_df)
+    if outlier_n > 0:
+        st.caption(f"已排除 {outlier_n} 筆極端值（IQR×2.5 之外）以利觀察")
     st.plotly_chart(fig2, use_container_width=True)
 
 with c2:
     st.markdown(f"#### {metric_label} 產業箱型圖")
     box_df = df[["industry", field]].dropna()
+    # Filter outliers per industry for display
+    flo, fhi = _clip_iqr(box_df[field], k=3.0)
+    box_df_clipped = box_df[box_df[field].between(flo, fhi)]
     industry_order = (
-        box_df.groupby("industry")[field].median()
+        box_df_clipped.groupby("industry")[field].median()
         .sort_values(ascending=False).index.tolist()
     )
     fig3 = px.box(
-        box_df,
+        box_df_clipped,
         x="industry",
         y=field,
         category_orders={"industry": industry_order},
         labels={"industry": "產業別", field: metric_label},
         color="industry",
+        points=False,  # hide individual outlier dots for cleanliness
     )
-    fig3.update_layout(height=400, showlegend=False, xaxis_tickangle=-35)
+    fig3.update_layout(
+        height=420,
+        showlegend=False,
+        xaxis_tickangle=-40,
+        yaxis=dict(range=[flo, fhi]),
+    )
     st.plotly_chart(fig3, use_container_width=True)
 
 st.markdown("---")
