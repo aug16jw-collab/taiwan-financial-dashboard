@@ -12,6 +12,7 @@ from core.institutional import (
     get_stock_institutional_history,
 )
 from core.loader import search_companies
+from core.market import get_all_stock_names
 
 st.set_page_config(page_title="法人籌碼", page_icon="🏦", layout="wide")
 st.title("🏦 法人籌碼（三大法人）")
@@ -23,18 +24,31 @@ st.markdown("## 今日三大法人 — 全市場買超排行")
 
 tab_twse, tab_tpex = st.tabs(["上市 (TWSE)", "上櫃 (TPEX)"])
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_all_names():
+    names = get_all_stock_names()
+    # Also merge from latest (MOPS data) as override
+    return names
+
+
 def _show_inst_table(df: pd.DataFrame, market_label: str):
     if df.empty:
         st.warning(f"目前無法取得{market_label}即時法人資料（可能非交易時間）")
         return
 
-    # Merge with company names if available
+    # Build name map: TWSE/TPEX API covers ETFs too; MOPS latest has official names
+    api_names = _load_all_names()
+    mops_names: dict = {}
     if not latest.empty:
-        names = latest[["code", "name"]].copy()
-        names["code"] = names["code"].astype(str)
-        df = df.merge(names, on="code", how="left")
-    else:
-        df["name"] = ""
+        for _, row in latest[["code", "name"]].iterrows():
+            mops_names[str(row["code"])] = str(row["name"])
+
+    def _lookup(code):
+        c = str(code)
+        return mops_names.get(c) or api_names.get(c) or ""
+
+    df = df.copy()
+    df["name"] = df["code"].apply(_lookup)
 
     inst_col = "三大法人合計"
     c1, c2 = st.columns(2)

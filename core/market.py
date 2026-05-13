@@ -109,6 +109,37 @@ def get_realtime_price(code: str, market: str) -> dict:
     return result
 
 
+def get_all_stock_names() -> dict:
+    """Return {code: name} for all TWSE + TPEX listed stocks (including ETFs)."""
+    key = "all_names"
+    now = time.time()
+    if key in _CACHE and now - _CACHE_TS.get(key, 0) < 3600:
+        return _CACHE[key]
+
+    names: dict = {}
+    try:
+        prices = _cached_get("twse_prices", _fetch_twse_prices)
+        for code, row in prices.items():
+            n = str(row.get("Name", "")).strip()
+            if n:
+                names[code] = n
+    except Exception:
+        pass
+    try:
+        tpex = _cached_get("tpex_prices", _fetch_tpex_prices)
+        for code, row in tpex.items():
+            n = str(row.get("CompanyName", "")).strip()
+            if n:
+                names[code] = n
+    except Exception:
+        pass
+
+    if names:
+        _CACHE[key] = names
+        _CACHE_TS[key] = now
+    return names
+
+
 def get_historical(code: str, market: str, period: str = "1y") -> pd.DataFrame:
     suffix = ".TW" if market == "上市" else ".TWO"
     df = yf.Ticker(f"{code}{suffix}").history(period=period)
