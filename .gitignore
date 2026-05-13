@@ -1,0 +1,18 @@
+# Raw MOPS Excel files (large, replaced by processed parquet)
+data/2*/
+*.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+
+# Streamlit cache
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
