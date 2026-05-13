@@ -93,7 +93,7 @@ col7.metric("ROE", f"{company.get('roe'):.1f}%" if pd.notna(company.get('roe')) 
 st.markdown("---")
 
 # ── Tabs ──
-tab1, tab2, tab3 = st.tabs(["📈 技術分析", "📉 財務趨勢", "📋 基本面摘要"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 技術分析", "📉 財務趨勢", "📋 基本面摘要", "💰 股息歷史", "📐 估值區間"])
 
 # ── Tab 1: Technical Analysis ──
 with tab1:
@@ -208,3 +208,150 @@ with tab3:
         fig.add_vline(x=float(company_v), line_color="red", line_width=2,
                       annotation_text=f"{name}: {company_v:.1f}", annotation_position="top right")
         st.plotly_chart(fig, use_container_width=True)
+
+# ── Tab 4: Dividend History ──
+with tab4:
+    import yfinance as yf
+    ticker_suffix = ".TW" if market == "上市" else ".TWO"
+    ticker_str = f"{code}{ticker_suffix}"
+
+    st.markdown(f"#### {code} {name} — 股息發放歷史")
+    try:
+        tkr = yf.Ticker(ticker_str)
+        divs = tkr.dividends
+        if divs.empty:
+            st.info("查無股息資料（可能是成長股或 yfinance 尚無紀錄）")
+        else:
+            divs = divs.reset_index()
+            divs.columns = ["日期", "每股股息(TWD)"]
+            divs["日期"] = pd.to_datetime(divs["日期"]).dt.date
+
+            # Annual aggregation
+            divs["年度"] = pd.to_datetime(divs["日期"]).dt.year
+            annual = divs.groupby("年度")["每股股息(TWD)"].sum().reset_index()
+            annual.columns = ["年度", "年度股息合計(TWD)"]
+
+            d1, d2 = st.columns(2)
+            with d1:
+                import plotly.graph_objects as go_div
+                fig_div = go_div.Figure(go_div.Bar(
+                    x=annual["年度"].astype(str),
+                    y=annual["年度股息合計(TWD)"],
+                    marker_color="#4CAF50",
+                    text=annual["年度股息合計(TWD)"].apply(lambda v: f"NT${v:.2f}"),
+                    textposition="outside",
+                ))
+                fig_div.update_layout(
+                    title="年度股息合計",
+                    xaxis_title="年度",
+                    yaxis_title="每股股息 (TWD)",
+                    height=350,
+                )
+                st.plotly_chart(fig_div, use_container_width=True)
+
+            with d2:
+                st.markdown("**歷次除息紀錄**")
+                disp_divs = divs.sort_values("日期", ascending=False).reset_index(drop=True)
+                disp_divs["每股股息(TWD)"] = disp_divs["每股股息(TWD)"].apply(lambda v: f"NT${v:.4f}")
+                st.dataframe(disp_divs.drop(columns=["年度"]), use_container_width=True, hide_index=True)
+
+            # Yield estimate
+            if price:
+                latest_annual = annual["年度股息合計(TWD)"].iloc[-1] if not annual.empty else 0
+                est_yield = latest_annual / price * 100
+                st.info(f"以目前股價 NT${price:,.2f} 計算，最近完整年度殖利率約 **{est_yield:.2f}%**")
+    except Exception as e:
+        st.warning(f"無法取得股息資料：{e}")
+
+# ── Tab 5: Valuation Band ──
+with tab5:
+    st.markdown(f"#### {code} {name} — P/E 估值區間")
+
+    eps_ann = eps_val * 4 if pd.notna(eps_val) else None
+
+    try:
+        ticker_suffix5 = ".TW" if market == "上市" else ".TWO"
+        tkr5 = yf.Ticker(f"{code}{ticker_suffix5}")
+        hist5 = tkr5.history(period="5y")
+
+        if hist5.empty or eps_ann is None or eps_ann <= 0:
+            st.info("歷史股價資料不足或 EPS 為零，無法繪製估值區間")
+        else:
+            hist5 = hist5.reset_index()
+            hist5["Date"] = pd.to_datetime(hist5["Date"]).dt.tz_localize(None)
+            hist5["PE_implied"] = hist5["Close"] / eps_ann
+
+            pe_10 = hist5["PE_implied"].quantile(0.10)
+            pe_25 = hist5["PE_implied"].quantile(0.25)
+            pe_50 = hist5["PE_implied"].quantile(0.50)
+            pe_75 = hist5["PE_implied"].quantile(0.75)
+            pe_90 = hist5["PE_implied"].quantile(0.90)
+
+            import plotly.graph_objects as go_pe
+            fig_pe = go_pe.Figure()
+
+            # PE bands as horizontal lines on price chart
+            for pct_val, label, color in [
+                (pe_90, f"90% PE ({pe_90:.1f}x)", "#F44336"),
+                (pe_75, f"75% PE ({pe_75:.1f}x)", "#FF9800"),
+                (pe_50, f"中位 PE ({pe_50:.1f}x)", "#9E9E9E"),
+                (pe_25, f"25% PE ({pe_25:.1f}x)", "#2196F3"),
+                (pe_10, f"10% PE ({pe_10:.1f}x)", "#1565C0"),
+            ]:
+                price_level = pct_val * eps_ann
+                fig_pe.add_hline(
+                    y=price_level,
+                    line_dash="dash",
+                    line_color=color,
+                    opacity=0.7,
+                    annotation_text=label,
+                    annotation_position="right",
+                )
+
+            fig_pe.add_trace(go_pe.Scatter(
+                x=hist5["Date"],
+                y=hist5["Close"],
+                name="收盤價",
+                mode="lines",
+                line=dict(color="#212121", width=1.5),
+            ))
+
+            if price:
+                fig_pe.add_hline(
+                    y=price,
+                    line_color="red",
+                    line_width=2,
+                    annotation_text=f"即時 NT${price:,.2f}",
+                    annotation_position="left",
+                )
+
+            fig_pe.update_layout(
+                title=f"{name} 5年股價 + PE估值帶（以 EPS×4={eps_ann:.2f} 估算）",
+                xaxis_title="日期",
+                yaxis_title="股價 (TWD)",
+                height=430,
+                hovermode="x unified",
+                showlegend=True,
+            )
+            st.plotly_chart(fig_pe, use_container_width=True)
+
+            # PE summary table
+            pe_rows = [
+                {"分位數": "10%（低估區）", "隱含PE": f"{pe_10:.1f}x", "對應股價": f"NT${pe_10*eps_ann:,.2f}"},
+                {"分位數": "25%", "隱含PE": f"{pe_25:.1f}x", "對應股價": f"NT${pe_25*eps_ann:,.2f}"},
+                {"分位數": "50%（中性）", "隱含PE": f"{pe_50:.1f}x", "對應股價": f"NT${pe_50*eps_ann:,.2f}"},
+                {"分位數": "75%", "隱含PE": f"{pe_75:.1f}x", "對應股價": f"NT${pe_75*eps_ann:,.2f}"},
+                {"分位數": "90%（高估區）", "隱含PE": f"{pe_90:.1f}x", "對應股價": f"NT${pe_90*eps_ann:,.2f}"},
+            ]
+            st.dataframe(pd.DataFrame(pe_rows), use_container_width=True, hide_index=True)
+
+            if pe and pe > 0:
+                if pe >= pe_75:
+                    st.warning(f"目前 PE {pe:.1f}x 高於歷史 75% 分位，股價偏高")
+                elif pe <= pe_25:
+                    st.success(f"目前 PE {pe:.1f}x 低於歷史 25% 分位，股價偏低")
+                else:
+                    st.info(f"目前 PE {pe:.1f}x 位於歷史 25%～75% 合理區間")
+
+    except Exception as e:
+        st.warning(f"無法計算估值區間：{e}")
