@@ -96,7 +96,9 @@ col7.metric("ROE", f"{company.get('roe'):.1f}%" if pd.notna(company.get('roe')) 
 st.markdown("---")
 
 # ── Tabs ──
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 技術分析", "📉 財務趨勢", "📋 基本面摘要", "💰 股息歷史", "📐 估值區間"])
+_n_quarters = len([v for v in quarters.values() if not v.empty])
+_trend_label = f"📉 財務趨勢（{_n_quarters} 季）" if _n_quarters >= 2 else "📉 財務趨勢"
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 技術分析", _trend_label, "📋 基本面摘要", "💰 股息歷史", "📐 估值區間"])
 
 # ── Tab 1: Technical Analysis ──
 with tab1:
@@ -134,7 +136,7 @@ with tab1:
 with tab2:
     multi_q = {k: v for k, v in quarters.items() if not v.empty}
     if len(multi_q) < 2:
-        st.info("目前只有 1 季資料，新增更多季度資料夾（如 data/2025Q4/）後即可顯示趨勢圖")
+        st.info("目前只有 1 季資料，需至少 2 季才可顯示趨勢圖")
         st.markdown("**當季財務指標：**")
         trend_data = []
         for label, field, unit in METRIC_DEFS[:8]:

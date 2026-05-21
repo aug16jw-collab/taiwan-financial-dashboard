@@ -4,6 +4,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 from core.loader import quality_filter
 from core.charts import distribution_chart, market_pie
 from core.nav import stock_table
@@ -78,6 +79,70 @@ for label, field, unit in METRIC_DEFS:
     })
 
 st.dataframe(pd.DataFrame(stat_rows), use_container_width=True, hide_index=True)
+
+st.markdown("---")
+
+# ── Multi-quarter market trend ──
+if len(quarters) >= 2:
+    st.markdown("### 📈 多季市場趨勢")
+    q_sorted = sorted(quarters.keys())
+
+    trend_sel = st.multiselect(
+        "選擇指標",
+        [m[0] for m in METRIC_DEFS[:9]],
+        default=["毛利率(%)", "ROE(%)", "EPS(元)"],
+        key="trend_metric_sel",
+    )
+    market_filter = st.radio("市場範圍", ["全部", "上市", "上櫃"], horizontal=True, key="trend_mkt")
+
+    COLORS = ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336", "#00BCD4"]
+    fig_trend = go.Figure()
+    for (label, field, _), color in zip(
+        [m for m in METRIC_DEFS[:9] if m[0] in trend_sel], COLORS
+    ):
+        medians, means = [], []
+        for q in q_sorted:
+            qdf = quarters[q]
+            if market_filter != "全部":
+                qdf = qdf[qdf["market"] == market_filter]
+            v = pd.to_numeric(qdf[field], errors="coerce")
+            medians.append(round(v.median(), 2) if not v.isna().all() else None)
+            means.append(round(v.mean(), 2) if not v.isna().all() else None)
+
+        fig_trend.add_trace(go.Scatter(
+            x=q_sorted, y=medians, name=f"{label}（中位數）",
+            mode="lines+markers",
+            line=dict(color=color, width=2),
+            marker=dict(size=8),
+            connectgaps=True,
+        ))
+        fig_trend.add_trace(go.Scatter(
+            x=q_sorted, y=means, name=f"{label}（平均）",
+            mode="lines", line=dict(color=color, width=1, dash="dot"),
+            connectgaps=True, opacity=0.55,
+        ))
+
+    fig_trend.update_layout(
+        height=380, hovermode="x unified",
+        legend=dict(orientation="h", y=1.12, font_size=11),
+        margin=dict(t=50, b=20),
+        yaxis_title="數值",
+    )
+    st.plotly_chart(fig_trend, use_container_width=True)
+
+    # Condensed quarter comparison table
+    with st.expander("各季度統計數字"):
+        rows = []
+        for label, field, unit in METRIC_DEFS[:9]:
+            row = {"指標": label}
+            for q in q_sorted:
+                qdf = quarters[q]
+                if market_filter != "全部":
+                    qdf = qdf[qdf["market"] == market_filter]
+                v = pd.to_numeric(qdf[field], errors="coerce").median()
+                row[q] = f"{v:.2f}{unit}" if pd.notna(v) else "-"
+            rows.append(row)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
