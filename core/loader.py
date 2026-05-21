@@ -65,10 +65,29 @@ def _compute_metrics(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _find_xlsx(folder: Path, market: str, keyword: str) -> Path:
+    """Find an xlsx file matching market and keyword, trying multiple naming patterns."""
+    candidates = [
+        folder / f"{market}_{keyword}.xlsx",           # 上市_綜合損益表.xlsx
+        folder / f"{market} {keyword}.xlsx",           # 上市 綜合損益表.xlsx
+    ]
+    # Also glob for any file containing both market and keyword
+    for p in candidates:
+        if p.exists():
+            return p
+    for p in folder.glob("*.xlsx"):
+        if market in p.name and keyword in p.name:
+            return p
+    raise FileNotFoundError(
+        f"找不到 {market} {keyword}.xlsx，資料夾：{folder}\n"
+        f"現有檔案：{[f.name for f in folder.glob('*.xlsx')]}"
+    )
+
+
 def load_quarter(folder: Path, market_label: str) -> pd.DataFrame:
-    income  = _load_income(folder / f"{market_label}_綜合損益表.xlsx")
-    balance = _load_balance(folder / f"{market_label}_資產負債表.xlsx")
-    cf      = _load_cf(folder / f"{market_label}_現金流量表.xlsx")
+    income  = _load_income(_find_xlsx(folder, market_label, "綜合損益表"))
+    balance = _load_balance(_find_xlsx(folder, market_label, "資產負債表"))
+    cf      = _load_cf(_find_xlsx(folder, market_label, "現金流量表"))
     df = income.merge(balance, on="code").merge(cf, on="code")
     df["market"] = "上市" if market_label == "上市" else "上櫃"
     return _compute_metrics(df)
